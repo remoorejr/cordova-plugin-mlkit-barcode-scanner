@@ -1,6 +1,6 @@
 import commonjs from '@rollup/plugin-commonjs';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
-import typescript from 'rollup-plugin-typescript2';
+import typescript from '@rollup/plugin-typescript';
 
 /** @type {import('rollup').RollupOptions} */
 const options = {
@@ -15,11 +15,11 @@ const options = {
   },
   external: ['cordova'],
   plugins: [
-    nodeResolve({ browser: true }),
-    commonjs(),
     typescript({
       tsconfig: './tsconfig.dist.json',
     }),
+    nodeResolve({ browser: true }),
+    commonjs(),
   ],
 };
 
