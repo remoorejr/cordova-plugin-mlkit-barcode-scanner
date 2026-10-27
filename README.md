@@ -108,12 +108,33 @@ const defaultOptions = {
   detectorSize: 0.6,
   rotateCamera: false,
   captureButton: false,
+  detectorHeight: 0,
+  highlightBarcode: false,
 };
 ```
 
 `captureButton`: when `true`, a capture button is shown at the bottom of the scanner.
 Barcodes are no longer scanned automatically; the user lines up the barcode in the viewfinder
 and taps the button to scan it. If no barcode is found, a short message is shown and the user can try again.
+
+`detectorHeight`: height of the scan area. `detectorSize` is the width of the scan area and
+`detectorHeight` its height, both as a fraction of the smaller screen dimension (e.g. `detectorSize: 0.9`
+and `detectorHeight: 0.3` gives a wide, flat rectangle). The default `0` means "same as `detectorSize`" (a square).
+Only barcodes inside the scan area are read.
+
+`highlightBarcode`: when `true`, all barcodes inside the scan area are outlined and the one that will be
+returned is highlighted in green and its value is shown above it. By default it is the barcode closest to the
+center of the scan area. If it is not the right one, tap another outlined barcode to select it instead.
+Tap the capture button (shown automatically in this mode) to return the selected barcode.
+Example for a page full of barcodes:
+
+```javascript
+cordova.plugins.mlkit.barcodeScanner.scan(
+  { detectorSize: 0.9, detectorHeight: 0.35, highlightBarcode: true },
+  success,
+  failure,
+);
+```
 
 ### Output/Return value
 

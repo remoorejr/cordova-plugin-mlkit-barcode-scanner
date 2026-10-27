@@ -21,6 +21,8 @@ export interface IOptions {
   detectorSize?: number;
   rotateCamera?: boolean;
   captureButton?: boolean;
+  detectorHeight?: number;
+  highlightBarcode?: boolean;
 }
 
 export interface IConfig {
@@ -30,6 +32,8 @@ export interface IConfig {
   detectorSize: number;
   rotateCamera: boolean;
   captureButton: boolean;
+  detectorHeight: number;
+  highlightBarcode: boolean;
 }
 
 export interface IResult {

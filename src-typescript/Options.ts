@@ -21,4 +21,6 @@ export const defaultOptions: Required<IOptions> = Object.freeze({
   detectorSize: 0.6,
   rotateCamera: false,
   captureButton: false,
+  detectorHeight: 0,
+  highlightBarcode: false,
 });

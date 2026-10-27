@@ -34,6 +34,20 @@
 @property(nonatomic, strong) MLKBarcodeScanner *barcodeDetector;
 @property(nonatomic, strong) UIButton *torchButton;
 @property(atomic, assign) BOOL captureRequested;
+@property(atomic, assign) BOOL processingFrame;
+@property(atomic, assign) BOOL finished;
+@property(nonatomic, strong) CIContext *ciContext;
+
+// Target area (in view coordinates) in which barcodes are scanned.
+@property(nonatomic, assign) CGRect targetRect;
+@property(nonatomic, assign) CGSize viewSize;
+
+// Highlight mode: barcodes detected inside the target area and the one that would be returned.
+@property(nonatomic, strong) CALayer *highlightLayer;
+@property(nonatomic, strong) UILabel *valueLabel;
+@property(nonatomic, strong) NSArray<NSDictionary *> *hits;
+@property(nonatomic, strong) NSDictionary *selectedHit;
+@property(nonatomic, copy) NSString *userSelectedKey;
 
 @end
 
@@ -155,80 +169,120 @@
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)connection {
 
-    // In capture button mode only analyze the frame after the user tapped the button.
-    if (self.captureButton && !self.captureRequested) {
+    if (self.finished || self.processingFrame) {
         return;
     }
 
-    //Convert sampleBuffer into an image.
-    //MLKVisionImage *image = [[MLKVisionImage alloc] initWithBuffer:sampleBuffer];
-    CVImageBufferRef imageBuffer =
-    CMSampleBufferGetImageBuffer(sampleBuffer);
-    CIImage *ciImage = [CIImage imageWithCVPixelBuffer:imageBuffer];
-    CIContext *temporaryContext = [CIContext contextWithOptions:nil];
-    CGImageRef videoImage = [temporaryContext
-                             createCGImage:ciImage
-                             fromRect:CGRectMake(0, 0,
-                                                 CVPixelBufferGetWidth(imageBuffer),
-                                                 CVPixelBufferGetHeight(imageBuffer))];
-
-    UIImage *image = [[UIImage alloc] initWithCGImage:videoImage];
-    CGImageRelease(videoImage);
-
-    //We're going to crop UIImage to the onscreen viewfinder's box size for faster processing.
-    UIImage *croppedImg = nil;
-
-    //Define the crop coordinates.
-    CGRect screenRect = [[UIScreen mainScreen] bounds];
-    CGFloat screenWidth = screenRect.size.width;
-    CGFloat screenHeight = screenRect.size.height;
-    
-    CGFloat imageWidth = image.size.width;
-    CGFloat imageHeight = image.size.height;
-    
-    CGFloat actualFrameWidth = 0;
-    CGFloat actualFrameHeight = 0;
-    
-    //Figure out which ratio is bigger and then subtract a value off the frame width in case some of the camera preview is hanging off screen.
-    if(imageWidth/screenWidth < imageHeight/screenHeight){
-        actualFrameWidth = imageWidth * _detectorSize;
-        actualFrameHeight = actualFrameWidth;
-    } else {
-        actualFrameHeight = imageHeight * _detectorSize;
-        actualFrameWidth = actualFrameHeight;
+    // In capture button mode only analyze the frame after the user tapped the button.
+    // (Highlight mode analyzes continuously and returns the selected barcode on tap.)
+    if (self.captureButton && !self.highlightBarcode && !self.captureRequested) {
+        return;
     }
 
-    //Define crop rectangle.
-    CGRect cropRect = CGRectMake(imageWidth/2 - actualFrameWidth/2, imageHeight/2 - actualFrameHeight/2, actualFrameWidth, actualFrameHeight);
+    CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+    if (imageBuffer == NULL) {
+        return;
+    }
+    CGFloat imageWidth = CVPixelBufferGetWidth(imageBuffer);
+    CGFloat imageHeight = CVPixelBufferGetHeight(imageBuffer);
+    CGSize viewSize = self.viewSize;
+    CGRect targetRect = self.targetRect;
+    if (imageWidth == 0 || imageHeight == 0 || viewSize.width == 0 || viewSize.height == 0) {
+        return;
+    }
 
-    //Crop image
-    croppedImg = [self croppIngimageByImageName:image toRect:cropRect];
+    // The preview fills the view (aspect fill). Map the on screen target area back to
+    // image coordinates so exactly what is inside the target area gets scanned.
+    CGFloat scale = MAX(viewSize.width / imageWidth, viewSize.height / imageHeight);
+    CGFloat dx = (viewSize.width - imageWidth * scale) / 2.0;
+    CGFloat dy = (viewSize.height - imageHeight * scale) / 2.0;
+    CGRect cropRect = CGRectMake((targetRect.origin.x - dx) / scale,
+                                 (targetRect.origin.y - dy) / scale,
+                                 targetRect.size.width / scale,
+                                 targetRect.size.height / scale);
+    cropRect = CGRectIntersection(CGRectIntegral(cropRect), CGRectMake(0, 0, imageWidth, imageHeight));
+    if (CGRectIsEmpty(cropRect) || CGRectIsNull(cropRect)) {
+        return;
+    }
 
-    //Rotate the image.
-    MLKVisionImage *portraitImage = [[MLKVisionImage alloc] initWithImage:croppedImg];
-    portraitImage.orientation = UIImageOrientationRight;
+    if (self.ciContext == nil) {
+        self.ciContext = [CIContext contextWithOptions:nil];
+    }
+    CIImage *ciImage = [CIImage imageWithCVPixelBuffer:imageBuffer];
+    CGImageRef videoImage = [self.ciContext createCGImage:ciImage
+                                                 fromRect:CGRectMake(0, 0, imageWidth, imageHeight)];
+    if (videoImage == NULL) {
+        return;
+    }
+    CGImageRef croppedImage = CGImageCreateWithImageInRect(videoImage, cropRect);
+    CGImageRelease(videoImage);
+    if (croppedImage == NULL) {
+        return;
+    }
+
+    UIImage *image = [UIImage imageWithCGImage:croppedImage];
+    CGImageRelease(croppedImage);
+
+    MLKVisionImage *visionImage = [[MLKVisionImage alloc] initWithImage:image];
+    visionImage.orientation = UIImageOrientationUp;
+
+    self.processingFrame = YES;
 
     //Send the image through the barcode reader.
-    [self.barcodeDetector processImage:portraitImage completion:^(NSArray<MLKBarcode *> *barcodes,
+    [self.barcodeDetector processImage:visionImage completion:^(NSArray<MLKBarcode *> *barcodes,
                                                           NSError *error) {
-        if (error != nil) {
+        self.processingFrame = NO;
+
+        if (error != nil || self.finished) {
             return;
+        }
+
+        if (self.highlightBarcode) {
+            NSMutableArray *hits = [NSMutableArray array];
+            for (MLKBarcode *barcode in barcodes) {
+                NSArray<NSValue *> *corners = barcode.cornerPoints;
+                if (corners.count == 0) {
+                    CGRect f = barcode.frame;
+                    corners = @[[NSValue valueWithCGPoint:CGPointMake(CGRectGetMinX(f), CGRectGetMinY(f))],
+                                [NSValue valueWithCGPoint:CGPointMake(CGRectGetMaxX(f), CGRectGetMinY(f))],
+                                [NSValue valueWithCGPoint:CGPointMake(CGRectGetMaxX(f), CGRectGetMaxY(f))],
+                                [NSValue valueWithCGPoint:CGPointMake(CGRectGetMinX(f), CGRectGetMaxY(f))]];
+                }
+
+                NSMutableArray<NSValue *> *points = [NSMutableArray array];
+                CGRect bounds = CGRectNull;
+                for (NSValue *corner in corners) {
+                    CGPoint c = corner.CGPointValue;
+                    CGPoint p = CGPointMake((cropRect.origin.x + c.x) * scale + dx,
+                                            (cropRect.origin.y + c.y) * scale + dy);
+                    [points addObject:[NSValue valueWithCGPoint:p]];
+                    bounds = CGRectUnion(bounds, CGRectMake(p.x, p.y, 0, 0));
+                }
+
+                NSString *value = [self valueForBarcode:barcode];
+                [hits addObject:@{@"barcode": barcode,
+                                  @"value": value,
+                                  @"key": [NSString stringWithFormat:@"%@|%ld", value, (long)barcode.format],
+                                  @"points": points,
+                                  @"rect": [NSValue valueWithCGRect:bounds]}];
+            }
+
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self updateHits:hits];
+            });
         } else if (self.captureButton && barcodes.count == 0) {
             self.captureRequested = NO;
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self showNoBarcodeMessage];
             });
-        } else if (barcodes != nil) {
-            for (MLKBarcode *barcode in barcodes) {
-                NSLog(@"Barcode value: %@", barcode.rawValue);
-                [self cleanupCaptureSession];
-                [self->_session stopRunning];
-                [self->delegate sendResult:barcode];
-                break;
-            }
+        } else if (barcodes.count > 0) {
+            MLKBarcode *barcode = barcodes.firstObject;
+            NSLog(@"Barcode value: %@", barcode.rawValue);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self finishWithBarcode:barcode];
+            });
         }
     }];
-
 }
 
 #pragma mark - Camera setup
@@ -262,6 +316,18 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     [self.videoDataOutput setAlwaysDiscardsLateVideoFrames:YES];
     [self.videoDataOutput setSampleBufferDelegate:self queue:self.videoDataOutputQueue];
     [self.session addOutput:self.videoDataOutput];
+
+    // Deliver upright (portrait) frames so image coordinates map straight onto the preview.
+    AVCaptureConnection *connection = [self.videoDataOutput connectionWithMediaType:AVMediaTypeVideo];
+    if (connection != nil) {
+        if (@available(iOS 17.0, *)) {
+            if ([connection isVideoRotationAngleSupported:90]) {
+                connection.videoRotationAngle = 90;
+            }
+        } else if (connection.isVideoOrientationSupported) {
+            connection.videoOrientation = AVCaptureVideoOrientationPortrait;
+        }
+    }
 }
 
 - (void)setUpCameraPreview {
@@ -276,13 +342,18 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     CGFloat screenWidth = screenRect.size.width;
     CGFloat screenHeight = screenRect.size.height;
 
-    CGFloat frameWidth = screenWidth*_detectorSize;
-    CGFloat frameHeight = frameWidth;
+    // The target area is a rectangle: detectorSize is its width and detectorHeight its height,
+    // both relative to the smaller screen dimension. Without detectorHeight it is a square.
+    CGFloat baseSize = MIN(screenWidth, screenHeight);
+    CGFloat frameWidth = MIN(baseSize * _detectorSize, screenWidth);
+    CGFloat frameHeight = MIN(baseSize * (_detectorHeight > 0 ? _detectorHeight : _detectorSize), screenHeight);
+    self.viewSize = CGSizeMake(screenWidth, screenHeight);
+    self.targetRect = CGRectMake(screenWidth/2 - frameWidth/2, screenHeight/2 - frameHeight/2, frameWidth, frameHeight);
 
     UILabel* _label1 = [[UILabel alloc] init];
     _label1.frame = CGRectMake(screenWidth/2 - frameWidth/2, screenHeight/2 - frameHeight/2, frameWidth, frameHeight);
     _label1.layer.masksToBounds = NO;
-    _label1.layer.cornerRadius = 30;
+    _label1.layer.cornerRadius = MIN(30.0, frameHeight / 4.0);
     _label1.userInteractionEnabled = YES;
     _label1.layer.borderColor = [UIColor whiteColor].CGColor;
     _label1.layer.borderWidth = 3.0;
@@ -304,7 +375,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     [_cancelButton setImage:cancelIcon
                    forState:UIControlStateNormal];
 
-    CGFloat screenOffset = (screenWidth/2 - frameWidth/2)/2 - buttonSize/2;
+    CGFloat screenOffset = MAX(16.0, (screenWidth/2 - frameWidth/2)/2 - buttonSize/2);
     NSLog(@"screenOffset %f", screenOffset);
 
     _cancelButton.frame = CGRectMake(screenOffset, screenHeight-screenOffset-buttonSize, buttonSize, buttonSize);
@@ -339,7 +410,8 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
     [self.view addSubview:self.torchButton];
 
-    if (self.captureButton) {
+    // Highlight mode needs a button to confirm the selected barcode.
+    if (self.captureButton || self.highlightBarcode) {
         CGFloat captureSize = 72.0;
         UIButton *captureButton = [[UIButton alloc] initWithFrame:CGRectMake(screenWidth/2 - captureSize/2,
                                                                             screenHeight-screenOffset-buttonSize/2-captureSize/2,
@@ -374,12 +446,170 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
     [self.view addSubview:catView];
 
+    if (self.highlightBarcode) {
+        self.highlightLayer = [CALayer layer];
+        self.highlightLayer.frame = CGRectMake(0, 0, screenWidth, screenHeight);
+        [self.view.layer addSublayer:self.highlightLayer];
+
+        self.valueLabel = [[UILabel alloc] init];
+        self.valueLabel.textColor = [UIColor whiteColor];
+        self.valueLabel.font = [UIFont systemFontOfSize:14];
+        self.valueLabel.textAlignment = NSTextAlignmentCenter;
+        self.valueLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
+        self.valueLabel.backgroundColor = [UIColor colorWithWhite:0 alpha:0.8];
+        self.valueLabel.layer.cornerRadius = 6;
+        self.valueLabel.layer.masksToBounds = YES;
+        self.valueLabel.userInteractionEnabled = NO;
+        self.valueLabel.hidden = YES;
+        [self.view addSubview:self.valueLabel];
+    }
+
 }
 
 #pragma mark - Helper Functions
 
 - (void)captureTapped:(id)sender {
-    self.captureRequested = YES;
+    if (self.highlightBarcode) {
+        if (self.selectedHit != nil) {
+            [self finishWithBarcode:self.selectedHit[@"barcode"]];
+        } else {
+            [self showNoBarcodeMessage];
+        }
+    } else {
+        self.captureRequested = YES;
+    }
+}
+
+- (NSString *)valueForBarcode:(MLKBarcode *)barcode {
+    NSString *value = barcode.rawValue;
+
+    // rawValue returns null if string is not UTF-8 encoded.
+    // If that's the case, we will decode it as ASCII,
+    // because it's the most common encoding for barcodes.
+    if (value == nil && barcode.rawData != nil) {
+        value = [[NSString alloc] initWithData:barcode.rawData encoding:NSASCIIStringEncoding];
+    }
+    return value ?: @"";
+}
+
+- (void)finishWithBarcode:(MLKBarcode *)barcode {
+    if (self.finished) {
+        return;
+    }
+    self.finished = YES;
+    [self cleanupCaptureSession];
+    [self->_session stopRunning];
+    [self->delegate sendResult:barcode];
+}
+
+// Keeps the barcode the user selected as long as it is still visible,
+// otherwise preselects the one closest to the center of the target area.
+- (void)updateHits:(NSArray<NSDictionary *> *)hits {
+    self.hits = hits;
+
+    NSDictionary *selected = nil;
+    if (self.userSelectedKey != nil) {
+        for (NSDictionary *hit in hits) {
+            if ([hit[@"key"] isEqualToString:self.userSelectedKey]) {
+                selected = hit;
+                break;
+            }
+        }
+        if (selected == nil) {
+            self.userSelectedKey = nil;
+        }
+    }
+
+    if (selected == nil) {
+        CGPoint center = CGPointMake(CGRectGetMidX(self.targetRect), CGRectGetMidY(self.targetRect));
+        CGFloat best = CGFLOAT_MAX;
+        for (NSDictionary *hit in hits) {
+            CGRect r = [hit[@"rect"] CGRectValue];
+            CGFloat distance = hypot(CGRectGetMidX(r) - center.x, CGRectGetMidY(r) - center.y);
+            if (distance < best) {
+                best = distance;
+                selected = hit;
+            }
+        }
+    }
+
+    self.selectedHit = selected;
+    [self renderHits];
+}
+
+// Lets the user select another highlighted barcode by tapping on it.
+- (BOOL)selectHitAtPoint:(CGPoint)point {
+    NSDictionary *best = nil;
+    CGFloat bestArea = CGFLOAT_MAX;
+    for (NSDictionary *hit in self.hits) {
+        CGRect r = CGRectInset([hit[@"rect"] CGRectValue], -24, -24);
+        if (CGRectContainsPoint(r, point)) {
+            CGRect own = [hit[@"rect"] CGRectValue];
+            CGFloat area = own.size.width * own.size.height;
+            if (area < bestArea) {
+                bestArea = area;
+                best = hit;
+            }
+        }
+    }
+    if (best == nil) {
+        return NO;
+    }
+    self.userSelectedKey = best[@"key"];
+    self.selectedHit = best;
+    [self renderHits];
+    return YES;
+}
+
+- (void)renderHits {
+    for (CALayer *layer in [self.highlightLayer.sublayers copy]) {
+        [layer removeFromSuperlayer];
+    }
+
+    UIColor *selectedColor = [UIColor colorWithRed:0.0 green:0.9 blue:0.46 alpha:1.0];
+    UIColor *otherColor = [UIColor colorWithRed:1.0 green:0.76 blue:0.03 alpha:1.0];
+
+    for (NSDictionary *hit in self.hits) {
+        BOOL isSelected = (hit == self.selectedHit);
+        UIBezierPath *path = [UIBezierPath bezierPath];
+        NSArray<NSValue *> *points = hit[@"points"];
+        for (NSUInteger i = 0; i < points.count; i++) {
+            CGPoint p = points[i].CGPointValue;
+            if (i == 0) {
+                [path moveToPoint:p];
+            } else {
+                [path addLineToPoint:p];
+            }
+        }
+        [path closePath];
+
+        CAShapeLayer *shape = [CAShapeLayer layer];
+        shape.path = path.CGPath;
+        shape.lineWidth = isSelected ? 4.0 : 3.0;
+        shape.lineJoin = kCALineJoinRound;
+        shape.strokeColor = (isSelected ? selectedColor : otherColor).CGColor;
+        shape.fillColor = isSelected ? [selectedColor colorWithAlphaComponent:0.25].CGColor : [UIColor clearColor].CGColor;
+        [self.highlightLayer addSublayer:shape];
+    }
+
+    // Show the value of the selected barcode so the user can verify it is the right one.
+    if (self.selectedHit == nil) {
+        self.valueLabel.hidden = YES;
+        return;
+    }
+    CGRect r = [self.selectedHit[@"rect"] CGRectValue];
+    self.valueLabel.text = [NSString stringWithFormat:@" %@ ", self.selectedHit[@"value"]];
+    CGFloat maxWidth = self.viewSize.width - 32;
+    CGSize size = [self.valueLabel sizeThatFits:CGSizeMake(maxWidth, CGFLOAT_MAX)];
+    CGFloat width = MIN(size.width, maxWidth);
+    CGFloat height = size.height + 8;
+    CGFloat x = MAX(16, MIN(CGRectGetMidX(r) - width / 2, self.viewSize.width - width - 16));
+    CGFloat y = CGRectGetMinY(r) - height - 6;
+    if (y < 0) {
+        y = CGRectGetMaxY(r) + 6;
+    }
+    self.valueLabel.frame = CGRectMake(x, y, width, height);
+    self.valueLabel.hidden = NO;
 }
 
 - (void)showNoBarcodeMessage {
@@ -405,6 +635,9 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 - (void)focusAtPoint:(id) sender {
     NSLog(@"captured touch");
     CGPoint touchPoint = [(UITapGestureRecognizer*)sender locationInView:self.view];
+    if (self.highlightBarcode) {
+        [self selectHitAtPoint:touchPoint];
+    }
     double focus_x = touchPoint.x/self.previewLayer.frame.size.width;
     double focus_y = (touchPoint.y+66)/self.previewLayer.frame.size.height;
 
