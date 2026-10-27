@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <plugin id="cordova-plugin-mlkit-barcode-scanner"
-  version="3.0.7"
+  version="4.0.0"
   xmlns="http://apache.org/cordova/ns/plugins/1.0"
   xmlns:android="http://schemas.android.com/apk/res/android">
   <name>cordova-plugin-mlkit-barcode-scanner</name>
@@ -11,12 +11,14 @@
 
   <engines>
     <engine name="cordova"
-      version=">=7.1.0" />
+      version=">=11.0.0" />
     <engine name="cordova-android"
-      version=">=8.0.0" />
+      version=">=12.0.0" />
     <engine name="cordova-ios"
-      version=">=4.5.0" />
+      version=">=7.0.0" />
   </engines>
+  <preference name="CAMERA_USAGE_DESCRIPTION"
+    default="The camera is used to scan barcodes." />
   <platform name="ios">
     <config-file parent="/*"
       target="config.xml">
@@ -37,6 +39,11 @@
       </array>
     </config-file>
 
+    <config-file target="*-Info.plist"
+      parent="NSCameraUsageDescription">
+      <string>$CAMERA_USAGE_DESCRIPTION</string>
+    </config-file>
+
     <framework src="Foundation.framework" />
     <framework src="AVFoundation.framework" />
     <framework src="UIKit.framework" />
@@ -46,7 +53,7 @@
       </config>
       <pods use-frameworks="true">
         <pod name="GoogleMLKit/BarcodeScanning"
-          spec="~> 2.5.0" />
+          spec="~> 7.0.0" />
       </pods>
     </podspec>
     <header-file src="src/ios/CDViOSScanner.h" />
@@ -60,9 +67,6 @@
       target="en.lproj/Localizable.strings" />
   </platform>
   <platform name="android">
-    <dependency id="cordova-plugin-androidx-adapter"
-      version="^1.1.3" />
-
     <config-file parent="/*"
       target="res/xml/config.xml">
       <feature name="cordova-plugin-mlkit-barcode-scanner">
@@ -83,10 +87,9 @@
       target="AndroidManifest.xml">
       <meta-data android:name="com.google.android.gms.version"
         android:value="@integer/google_play_services_version" />
-      <meta-data android:name="com.google.android.gms.vision.DEPENDENCIES"
-        android:value="barcode" />
       <activity android:label="Read Barcode"
         android:name="com.mobisys.cordova.plugins.mlkit.barcode.scanner.CaptureActivity"
+        android:exported="false"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
     </config-file>
 
@@ -102,9 +105,9 @@
     <resource-file src="src/android/res/assets/beep.ogg"
       target="assets/beep.ogg" />
     <resource-file src="src/android/res/values/strings-en.xml"
-      target="res/values/strings.xml" />
+      target="res/values/mlkit_barcode_scanner_strings.xml" />
     <resource-file src="src/android/res/values/strings-de.xml"
-      target="res/values-de/strings.xml" />
+      target="res/values-de/mlkit_barcode_scanner_strings.xml" />
     <resource-file src="src/android/res/layout/capture_activity.xml"
       target="res/layout/capture_activity.xml" />
     <resource-file src="src/android/res/drawable/flashlight.png"
@@ -114,20 +117,14 @@
     <resource-file src="src/android/res/drawable/torch_inactive.xml"
       target="res/drawable/torch_inactive.xml" />
 
-    <framework src="com.android.support:support-v4:27.1.0" />
-    <framework src="com.android.support:design:27.1.0" />
+    <framework src="androidx.appcompat:appcompat:1.7.0" />
+    <framework src="com.google.android.material:material:1.12.0" />
+    <framework src="com.google.mlkit:barcode-scanning:17.3.0" />
 
-    <framework src="com.google.android.gms:play-services-vision:17.0.2" />
-    <framework src="com.google.mlkit:barcode-scanning:16.2.0" />
-
-    <framework src="androidx.camera:camera-core:1.0.0-beta05" />
-    <framework src="androidx.camera:camera-camera2:1.0.0-beta05" />
-    <framework src="androidx.camera:camera-lifecycle:1.0.0-beta05" />
-    <framework src="androidx.camera:camera-view:1.0.0-alpha12" />
-    <framework src="androidx.constraintlayout:constraintlayout:2.0.4" />
-
-    <framework src="src/android/build-extras.gradle"
-      custom="true"
-      type="gradleReference" />
+    <framework src="androidx.camera:camera-core:1.3.4" />
+    <framework src="androidx.camera:camera-camera2:1.3.4" />
+    <framework src="androidx.camera:camera-lifecycle:1.3.4" />
+    <framework src="androidx.camera:camera-view:1.3.4" />
+    <framework src="androidx.constraintlayout:constraintlayout:2.1.4" />
   </platform>
 </plugin>

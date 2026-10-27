@@ -162,7 +162,10 @@ public class MLKitBarcodeScanner extends CordovaPlugin {
           Log.d("MLKitBarcodeScanner", "Barcode read: " + barcodeValue);
         }
       } else {
-        String err = data.getStringExtra("err");
+        String err = data != null ? data.getStringExtra("err") : null;
+        if (err == null) {
+          err = "USER_CANCELLED";
+        }
         JSONArray result = new JSONArray();
         result.put(err);
         result.put("");

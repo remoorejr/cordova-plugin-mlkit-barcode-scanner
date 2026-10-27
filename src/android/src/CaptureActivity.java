@@ -167,13 +167,10 @@ public class CaptureActivity extends AppCompatActivity implements SurfaceHolder.
 
   private void requestCameraPermission() {
 
-    final String[] permissions = new String[] { Manifest.permission.CAMERA,
-        Manifest.permission.WRITE_EXTERNAL_STORAGE };
+    final String[] permissions = new String[] { Manifest.permission.CAMERA };
 
     boolean shouldShowPermission = !ActivityCompat.shouldShowRequestPermissionRationale(this,
         Manifest.permission.CAMERA);
-    shouldShowPermission = shouldShowPermission
-        && !ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
 
     if (shouldShowPermission) {
       ActivityCompat.requestPermissions(this, permissions, RC_HANDLE_CAMERA_PERM);
@@ -257,7 +254,7 @@ public class CaptureActivity extends AppCompatActivity implements SurfaceHolder.
 
   void startCamera() {
     mCameraView = findViewById(getResources().getIdentifier("previewView", "id", getPackageName()));
-    mCameraView.setPreferredImplementationMode(PreviewView.ImplementationMode.TEXTURE_VIEW);
+    mCameraView.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
 
     Boolean rotateCamera = getIntent().getBooleanExtra("RotateCamera", false);
     if (rotateCamera) {
@@ -303,7 +300,7 @@ public class CaptureActivity extends AppCompatActivity implements SurfaceHolder.
     CameraSelector cameraSelector = new CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK)
         .build();
 
-    preview.setSurfaceProvider(mCameraView.createSurfaceProvider());
+    preview.setSurfaceProvider(mCameraView.getSurfaceProvider());
 
     ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).setTargetAspectRatio(AspectRatio.RATIO_16_9)
@@ -313,7 +310,7 @@ public class CaptureActivity extends AppCompatActivity implements SurfaceHolder.
         .getClient(new BarcodeScannerOptions.Builder().setBarcodeFormats(barcodeFormat).build());
 
     imageAnalysis.setAnalyzer(executor, new ImageAnalysis.Analyzer() {
-      @SuppressLint("UnsafeExperimentalUsageError")
+      @SuppressLint("UnsafeOptInUsageError")
       @Override
       public void analyze(@NonNull ImageProxy image) {
 
@@ -419,6 +416,9 @@ public class CaptureActivity extends AppCompatActivity implements SurfaceHolder.
       diameter -= offset;
 
       canvas = holder.lockCanvas();
+      if (canvas == null) {
+        return;
+      }
       canvas.drawColor(0, PorterDuff.Mode.CLEAR);
       // border's properties
       paint = new Paint();

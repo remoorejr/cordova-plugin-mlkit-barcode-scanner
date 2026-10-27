@@ -19,14 +19,28 @@
     _previousStatusBarStyle = -1;
     _previousOrientation = UIInterfaceOrientationUnknown;
     NSString *beepSoundPath = [[NSBundle mainBundle] pathForResource:@"beep" ofType:@"caf"];
-    NSURL *beepSoundUrl = [NSURL fileURLWithPath:beepSoundPath];
-    self->_player = [[AVAudioPlayer alloc] initWithContentsOfURL:beepSoundUrl
-                                                               error:nil];
+    if (beepSoundPath != nil) {
+        NSURL *beepSoundUrl = [NSURL fileURLWithPath:beepSoundPath];
+        self->_player = [[AVAudioPlayer alloc] initWithContentsOfURL:beepSoundUrl
+                                                                   error:nil];
+    }
+}
+
+- (UIInterfaceOrientation)currentInterfaceOrientation
+{
+    if (@available(iOS 13.0, *)) {
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]]) {
+                return ((UIWindowScene *)scene).interfaceOrientation;
+            }
+        }
+    }
+    return UIInterfaceOrientationUnknown;
 }
 
 - (void)startScan:(CDVInvokedUrlCommand *)command
 {
-    _previousOrientation = [[UIApplication sharedApplication] statusBarOrientation];
+    _previousOrientation = [self currentInterfaceOrientation];
 
     BOOL hasCamera = [UIImagePickerController isSourceTypeAvailable: UIImagePickerControllerSourceTypeCamera];
 
@@ -155,7 +169,7 @@
     }
 
     _previousStatusBarStyle = [UIApplication sharedApplication].statusBarStyle;
-    _previousOrientation = [[UIApplication sharedApplication] statusBarOrientation];
+    _previousOrientation = [self currentInterfaceOrientation];
 
     __block UINavigationController* nav = [[UINavigationController alloc]
                                            initWithRootViewController:self.cameraViewController];

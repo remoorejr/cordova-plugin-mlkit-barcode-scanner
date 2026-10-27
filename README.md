@@ -7,21 +7,13 @@ The MLKit library is incredibly performant and fast in comparison to any other b
 
 ## Plugin Dependencies
 
-| Dependency                        | Version   | Info                       |
-| --------------------------------- | --------- | -------------------------- |
-| `cordova-android`                 | `>=8.0.0` |                            |
-| `cordova-ios`                     | `>=4.5.0` |                            |
-| `cordova-plugin-androidx`         | ` ^3.0.0` | If cordova-android < 9.0.0 |
-| `cordova-plugin-androidx-adapter` | ` ^1.1.3` |                            |
+| Dependency        | Version    | Info                              |
+| ----------------- | ---------- | --------------------------------- |
+| `cordova-android` | `>=12.0.0` | AndroidX, Java 17, minSdk 24+     |
+| `cordova-ios`     | `>=7.0.0`  | GoogleMLKit pod 7.0, iOS 15.5+    |
 
-## Prerequisites
-
-If your `cordova-android` version is below `9.0.0`, you have to install `cordova-plugin-androidx` first before installing this plugin.
-Execute this command in your terminal:
-
-```bash
-npx cordova plugin add cordova-plugin-androidx
-```
+On iOS the camera usage text can be set at install time:
+`cordova plugin add cordova-plugin-mlkit-barcode-scanner --variable CAMERA_USAGE_DESCRIPTION="Scan barcodes"`
 
 ## Installation
 
