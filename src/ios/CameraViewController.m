@@ -33,6 +33,7 @@
 
 @property(nonatomic, strong) MLKBarcodeScanner *barcodeDetector;
 @property(nonatomic, strong) UIButton *torchButton;
+@property(atomic, assign) BOOL captureRequested;
 
 @end
 
@@ -154,6 +155,11 @@
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)connection {
 
+    // In capture button mode only analyze the frame after the user tapped the button.
+    if (self.captureButton && !self.captureRequested) {
+        return;
+    }
+
     //Convert sampleBuffer into an image.
     //MLKVisionImage *image = [[MLKVisionImage alloc] initWithBuffer:sampleBuffer];
     CVImageBufferRef imageBuffer =
@@ -207,6 +213,11 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
                                                           NSError *error) {
         if (error != nil) {
             return;
+        } else if (self.captureButton && barcodes.count == 0) {
+            self.captureRequested = NO;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self showNoBarcodeMessage];
+            });
         } else if (barcodes != nil) {
             for (MLKBarcode *barcode in barcodes) {
                 NSLog(@"Barcode value: %@", barcode.rawValue);
@@ -328,6 +339,27 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 
     [self.view addSubview:self.torchButton];
 
+    if (self.captureButton) {
+        CGFloat captureSize = 72.0;
+        UIButton *captureButton = [[UIButton alloc] initWithFrame:CGRectMake(screenWidth/2 - captureSize/2,
+                                                                            screenHeight-screenOffset-buttonSize/2-captureSize/2,
+                                                                            captureSize, captureSize)];
+        captureButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.25];
+        captureButton.layer.cornerRadius = captureSize/2;
+        captureButton.layer.borderColor = [UIColor whiteColor].CGColor;
+        captureButton.layer.borderWidth = 4.0;
+        captureButton.accessibilityLabel = NSLocalizedString(@"Capture", @"Capture button label");
+        UIView *inner = [[UIView alloc] initWithFrame:CGRectInset(captureButton.bounds, 10, 10)];
+        inner.backgroundColor = [UIColor whiteColor];
+        inner.layer.cornerRadius = inner.bounds.size.width/2;
+        inner.userInteractionEnabled = NO;
+        [captureButton addSubview:inner];
+        [captureButton addTarget:self
+                          action:@selector(captureTapped:)
+                forControlEvents:UIControlEventTouchUpInside];
+        [self.view addSubview:captureButton];
+    }
+
     [self.view addSubview:_label1];
 
     self.imageView = [[UIImageView alloc] initWithImage:nil];
@@ -345,6 +377,30 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 }
 
 #pragma mark - Helper Functions
+
+- (void)captureTapped:(id)sender {
+    self.captureRequested = YES;
+}
+
+- (void)showNoBarcodeMessage {
+    UILabel *label = [[UILabel alloc] init];
+    label.text = NSLocalizedString(@"No barcode found. Please try again.", @"Shown when capture finds no barcode.");
+    label.textColor = [UIColor whiteColor];
+    label.textAlignment = NSTextAlignmentCenter;
+    label.numberOfLines = 0;
+    label.backgroundColor = [UIColor colorWithWhite:0 alpha:0.7];
+    label.layer.cornerRadius = 8;
+    label.layer.masksToBounds = YES;
+    CGSize size = [label sizeThatFits:CGSizeMake(self.view.bounds.size.width - 80, CGFLOAT_MAX)];
+    label.frame = CGRectMake(0, 0, size.width + 24, size.height + 16);
+    label.center = CGPointMake(self.view.bounds.size.width/2, self.view.bounds.size.height - 150);
+    [self.view addSubview:label];
+    [UIView animateWithDuration:0.3 delay:1.5 options:0 animations:^{
+        label.alpha = 0;
+    } completion:^(BOOL finished) {
+        [label removeFromSuperview];
+    }];
+}
 
 - (void)focusAtPoint:(id) sender {
     NSLog(@"captured touch");

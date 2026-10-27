@@ -21,6 +21,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.ImageButton;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
@@ -79,6 +80,9 @@ public class CaptureActivity extends AppCompatActivity implements SurfaceHolder.
   private ImageButton _TorchButton;
   private Camera camera;
 
+  private boolean _CaptureButtonMode = false;
+  private volatile boolean _CaptureRequested = false;
+
   private ScaleGestureDetector _ScaleGestureDetector;
   private GestureDetector _GestureDetector;
 
@@ -110,6 +114,18 @@ public class CaptureActivity extends AppCompatActivity implements SurfaceHolder.
       startCamera();
     } else {
       requestCameraPermission();
+    }
+
+    _CaptureButtonMode = getIntent().getBooleanExtra("CaptureButton", false);
+    if (_CaptureButtonMode) {
+      View captureButton = findViewById(getResources().getIdentifier("capture_button", "id", getPackageName()));
+      captureButton.setVisibility(View.VISIBLE);
+      captureButton.setOnClickListener(new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+          _CaptureRequested = true;
+        }
+      });
     }
 
     _GestureDetector = new GestureDetector(this, new CaptureGestureListener());
@@ -314,7 +330,14 @@ public class CaptureActivity extends AppCompatActivity implements SurfaceHolder.
       @Override
       public void analyze(@NonNull ImageProxy image) {
 
-        if (image == null || image.getImage() == null) {
+        if (image.getImage() == null) {
+          image.close();
+          return;
+        }
+
+        // In capture button mode only analyze the frame after the user tapped the button.
+        if (_CaptureButtonMode && !_CaptureRequested) {
+          image.close();
           return;
         }
 
@@ -353,6 +376,13 @@ public class CaptureActivity extends AppCompatActivity implements SurfaceHolder.
                  * findViewById(getResources().getIdentifier("imageView", "id",
                  * getPackageName())); imageView.setImageBitmap(bitmap);
                  */
+
+                if (_CaptureButtonMode && barCodes.isEmpty()) {
+                  _CaptureRequested = false;
+                  Toast.makeText(CaptureActivity.this,
+                      getResources().getIdentifier("no_barcode_found", "string", getPackageName()),
+                      Toast.LENGTH_SHORT).show();
+                }
 
                 if (barCodes.size() > 0) {
                   for (Barcode barcode : barCodes) {

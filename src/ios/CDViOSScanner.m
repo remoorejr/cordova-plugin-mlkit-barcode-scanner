@@ -74,6 +74,7 @@
                 NSNumber* barcodeFormats = [config valueForKey:@"barcodeFormats"] ?: @1234;
                 self.cameraViewController.barcodeFormats = barcodeFormats;
                 self.cameraViewController.detectorSize = (CGFloat)[[config valueForKey:@"detectorSize"] ?: @0.5 floatValue];
+                self.cameraViewController.captureButton = [[config valueForKey:@"captureButton"] boolValue];
                 self.cameraViewController.modalPresentationStyle = UIModalPresentationFullScreen;
 
                 NSLog(@"scanAreaSize: %f, barcodeFormats: %@", self.cameraViewController.detectorSize, self.cameraViewController.barcodeFormats);

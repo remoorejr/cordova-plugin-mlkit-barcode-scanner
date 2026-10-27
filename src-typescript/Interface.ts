@@ -20,6 +20,7 @@ export interface IOptions {
   vibrateOnSuccess?: boolean;
   detectorSize?: number;
   rotateCamera?: boolean;
+  captureButton?: boolean;
 }
 
 export interface IConfig {
@@ -28,6 +29,7 @@ export interface IConfig {
   vibrateOnSuccess: boolean;
   detectorSize: number;
   rotateCamera: boolean;
+  captureButton: boolean;
 }
 
 export interface IResult {

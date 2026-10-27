@@ -39,6 +39,18 @@
         app:layout_constraintTop_toTopOf="@+id/overlay" />-->
 
     <ImageButton
+        android:id="@+id/capture_button"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:layout_marginBottom="20dp"
+        android:background="@drawable/capture_button"
+        android:contentDescription="@string/capture"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <ImageButton
         android:id="@+id/torch_button"
         android:layout_width="50dp"
         android:layout_height="50dp"

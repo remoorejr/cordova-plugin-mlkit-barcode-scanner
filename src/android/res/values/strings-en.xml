@@ -4,6 +4,8 @@
     <string name="launcher_name">@string/app_name</string>
     <string name="activity_name">@string/launcher_name</string>
     <string name="ok">OK</string>
+    <string name="capture">Capture</string>
+    <string name="no_barcode_found">No barcode found. Please try again.</string>
     <string name="permission_camera_rationale">For detection, access to camera is needed</string>
     <string name="no_camera_permission">This application cannot run because it does not have permission to the camera. The application will close.</string>
     <string name="no_cameras_found">The device has no camera.</string>

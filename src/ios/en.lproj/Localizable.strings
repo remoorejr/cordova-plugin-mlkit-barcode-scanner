@@ -6,3 +6,6 @@
 
 */
 "The device has no camera." = "The device has no camera.";
+
+"Capture" = "Capture";
+"No barcode found. Please try again." = "No barcode found. Please try again.";

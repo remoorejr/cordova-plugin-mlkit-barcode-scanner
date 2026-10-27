@@ -107,8 +107,13 @@ const defaultOptions = {
   vibrateOnSuccess: false,
   detectorSize: 0.6,
   rotateCamera: false,
+  captureButton: false,
 };
 ```
+
+`captureButton`: when `true`, a capture button is shown at the bottom of the scanner.
+Barcodes are no longer scanned automatically; the user lines up the barcode in the viewfinder
+and taps the button to scan it. If no barcode is found, a short message is shown and the user can try again.
 
 ### Output/Return value
 

@@ -112,6 +112,8 @@
       target="res/layout/capture_activity.xml" />
     <resource-file src="src/android/res/drawable/flashlight.png"
       target="res/drawable/flashlight.png" />
+    <resource-file src="src/android/res/drawable/capture_button.xml"
+      target="res/drawable/capture_button.xml" />
     <resource-file src="src/android/res/drawable/torch_active.xml"
       target="res/drawable/torch_active.xml" />
     <resource-file src="src/android/res/drawable/torch_inactive.xml"

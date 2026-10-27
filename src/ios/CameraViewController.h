@@ -31,6 +31,7 @@
 @property(nonatomic,assign)id delegate;
 @property(nonatomic,assign) NSNumber *barcodeFormats;
 @property(nonatomic,assign) CGFloat detectorSize;
+@property(nonatomic,assign) BOOL captureButton;
 
 @end
 
